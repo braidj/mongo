@@ -77,7 +77,21 @@ class Mongo(object):
                 print("Caught a different TypeError:", e)
                 self.logger.error(f"{Mongo.__name__}: Caught a different TypeError: {e}")
                 return 0
-    
+            
+    def get_schema_details_by_id(self,id):
+        """
+        Returns the schema details for a given schema id
+        """
+        collection = self.database.get_collection("schemas")
+        schema_details = collection.find_one({"schemaId":id})
+
+        if type(schema_details) == type(None):
+            self.logger.warning(f"{Mongo.__name__}: Schema {id} does not exist in {self.database}")
+            return 0
+        else:
+            self.logger.info(f"{Mongo.__name__}: Returned schema details for {id}")
+            return schema_details
+   
     def get_schema_details(self,schema_name):
         """
         Returns the schema details for a given schema name
