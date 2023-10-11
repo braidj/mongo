@@ -1,19 +1,23 @@
 import pymongo
+import sys
+
+class Mongo(object):
 
 
-class Connector(object):
+    def __init__(self,target,database,logger) -> None:
 
-    def __init__(self,client_name,target="local") -> None:
-
-        self.client_name = client_name
+        self.database = database
         self.target = target
+        self.logger = logger
 
-        if target == "local":
-            self.__local_connect(self.client_name)
-        elif target == "remote":
-            self.__remote_connect(self.client_name)
+        if target == "LOCAL":
+            self.__local_connect(self.database)
+        elif target == "REMOTE":
+            self.__remote_connect(self.database)
 
-    def __local_connect(self,client_name):
+        logger.info(f"Mongo: initialised for {target} instance on {database} using {self.connection_uri}")
+
+    def __local_connect(self,database):
         """
         Local connection to  a specific client
         """
@@ -21,18 +25,19 @@ class Connector(object):
         mongo_port = 27017  # The default MongoDB port
 
         # MongoDB connection URI
-        connection_uri = f"mongodb://{mongo_host}:{mongo_port}/{client_name}"
+        self.connection_uri = f"mongodb://{mongo_host}:{mongo_port}/{database}"
 
         # Connect to MongoDB
         try:
             # client = pymongo.MongoClient(connection_uri, username=username, password=password)
-            self.client = pymongo.MongoClient(connection_uri)
+            self.client = pymongo.MongoClient(self.connection_uri)
             
-            self.database = self.client[client_name]
-            print(f"Connected to {self.target}/{self.client_name} successfully!")
+            self.database = self.client[database]
 
         except pymongo.errors.ConnectionFailure as e:
+            self.logger.error(f"{Mongo.__name__} Failed to connect to MongoDB: {e}")
             print("Failed to connect to MongoDB:", e)
+            sys.exit(1)
 
     def all_schemas(self):
         """
@@ -45,15 +50,33 @@ class Connector(object):
             row = {'id':doc['id'],'name':doc['name'],'description':doc['description']}
             schema_details.append(row)
 
+        self.logger.info(f"{Mongo.__name__}: {len(schema_details)} schemas found in {self.database}")
+
         return schema_details
     
     def get_schema_id(self,schema_name):
         """
         Returns the schema id for a given schema name
         """
+        self.logger.info(f"{Mongo.__name__}: Getting schema id for {schema_name}")
         collection = self.database.get_collection("schemas")
-        schema_id = collection.find_one({"name":schema_name})['id']
-        return schema_id
+        try:
+            schema_id = collection.find_one({"name":schema_name})['id']
+            self.logger.info(f"{Mongo.__name__}: Schema id for {schema_name} is {schema_id}")
+            return schema_id
+        
+        except TypeError as e:
+
+            if "'NoneType' object is not subscriptable" in str(e):
+                # Handle the specific TypeError here
+                print(f"Schema {schema_name} does not exist in {self.database}")
+                self.logger.warning(f"{Mongo.__name__}: Schema {schema_name} does not exist in {self.database}")
+                return 0
+            else:
+                # Handle other TypeErrors
+                print("Caught a different TypeError:", e)
+                self.logger.error(f"{Mongo.__name__}: Caught a different TypeError: {e}")
+                return 0
     
     def get_schema_details(self,schema_name):
         """
@@ -61,59 +84,23 @@ class Connector(object):
         """
         collection = self.database.get_collection("schemas")
         schema_details = collection.find_one({"name":schema_name})
-        return schema_details
+
+        if type(schema_details) == type(None):
+            self.logger.warning(f"{Mongo.__name__}: Schema {schema_name} does not exist in {self.database}")
+            return 0
+        else:
+            self.logger.info(f"{Mongo.__name__}: Returned schema details for {schema_name}")
+            return schema_details
 
     def __remote_connect(self):
         """
         Remote connection to a specific client
         """
-        print("Remote connection not implemented yet")
+        self.logger.info(f"{Mongo.__name__}: Remote connection not implemented yet")
         self.client = None
         self.database = None
     
     def disconnect(self):
         self.client.close()
-        print(f"Disconnected from {self.target}/{self.client_name} successfully!")
+        self.logger.info(f"Mongo: Disconnected from {self.target} instance")
 
-
-def report_schemas(schema_list='not passed'):
-    """
-    Reports the schema name and id for requested schemas
-    """
-
-    sorted_schemas = sorted(mongo_conn.all_schemas(), key=lambda k: k['name'])
-    sorted_names = [i['name'] for i in sorted_schemas] # used to check if schema is available
-
-    if schema_list=='not passed':
-        print(f'\nThe full {len(sorted_schemas)} schema(s) are:\n')
-        filtered = sorted_schemas
-    else:
-        if type(schema_list) != list:
-            print("Expected a list of schema names")
-            raise TypeError
-        else:
-
-            missing_items = [item for item in schema_list if item not in sorted_names]
-            if len(missing_items) > 0:
-                print(f"The following schema(s) are not available in that instance: {missing_items}")
-                sys.exit(1)
-            
-            filtered = [i for i in sorted_schemas if i['name'] in schema_list]
-
-    for counter, i in enumerate(filtered,1):
-
-            file = i['name']
-            schema_id = i['id']
-            print(f"{counter}: {file} = {schema_id}")
-
-
-if __name__ == "__main__":
-
-    mongo_conn = Connector("xefr-signify-dev")
-
-    report_schemas(['TSP UK Placements Forecast'])
-    print(mongo_conn.get_schema_id('TSP UK Placements Forecast'))
-    print(mongo_conn.get_schema_details('TSP UK Placements Forecast'))
-
-    mongo_conn.disconnect()
-    
