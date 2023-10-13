@@ -3,7 +3,6 @@ import sys
 
 class Mongo(object):
 
-
     def __init__(self,target,database,logger) -> None:
 
         self.database = database
@@ -83,10 +82,11 @@ class Mongo(object):
         Returns the schema details for a given schema id
         """
         collection = self.database.get_collection("schemas")
-        schema_details = collection.find_one({"schemaId":id})
+        schema_details = collection.find_one({"id":id})
 
         if type(schema_details) == type(None):
             self.logger.warning(f"{Mongo.__name__}: Schema {id} does not exist in {self.database}")
+            print(collection)
             return 0
         else:
             self.logger.info(f"{Mongo.__name__}: Returned schema details for {id}")
