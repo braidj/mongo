@@ -1,5 +1,7 @@
 import pymongo
 import sys
+import json
+import common_funcs as cf
 
 class Mongo(object):
 
@@ -36,6 +38,39 @@ class Mongo(object):
         except pymongo.errors.ConnectionFailure as e:
             self.logger.error(f"{Mongo.__name__} Failed to connect to MongoDB: {e}")
             print("Failed to connect to MongoDB:", e)
+            sys.exit(1)
+
+    def get_xefr_json(self,doc_type):
+        """
+        Extracts out the schemas/portals collection to <schemas/portals>.json file from the mongo database
+        This is functionally equivalent to clicking download schemas from the XEFR UI
+        and a lot easier
+        N.B. portals collection name is portalDefinitions
+        """
+
+        if doc_type not in ['schemas','portals']:
+            raise ValueError("schemas or portals only")
+        
+        doc_type_collection = {
+            "schemas":"schemas",
+            "portals":"portalDefinitions"
+        }
+        
+        collection = self.database.get_collection(doc_type_collection[doc_type])
+        documents = collection.find()
+        document_list = [doc for doc in documents]
+
+        # Define the path to the JSON file where you want to store the data
+        output_file = cf.get_source_json(doc_type)
+
+        # Write the list of dictionaries to a JSON file
+        try:
+            with open(output_file, 'w') as json_file:
+                json.dump(document_list, json_file, default=str, indent=4)
+                self.logger.info(f"Mongo: downloaded {output_file}")
+        except Exception as e:
+            self.logger.error(f"Mongo: Failed to download {output_file} - {e}")
+            print(f"Failed to download {output_file} - {e}")
             sys.exit(1)
 
     def all_schemas(self):
